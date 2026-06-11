@@ -135,6 +135,24 @@ Few directions for new contributors:
 
 -   Reviewing [open PRs](https://github.com/Bitshala-Incubator/silent-pay-indexer/pulls) are a good place to understand the codebase and the contribution process.
 
+## :test_tube: E2E Testing
+
+The repository contains an End-to-End (E2E) testing suite that validates the functionality of the indexer against a real, locally spawned Bitcoin node using Docker.
+
+**Running E2E tests:**
+
+1. Ensure that Docker is running on your machine (required to spawn the Bitcoin core node).
+2. Execute the tests via npm:
+
+```bash
+    $ npm run test:e2e
+```
+
+The E2E suite covers:
+- Silent Blocks indexing and serialization matching exactly what a real node produces.
+- Transactions API endpoints (`/transactions/height/:height`, `/transactions/range`, etc.)
+- Chain Reorganization scenarios (simulating blockchain rollbacks using the `invalidateblock` RPC command).
+
 ## :wrench: Experimental Warning
 
 This service is experimental and under active development. By using it, you acknowledge the following:

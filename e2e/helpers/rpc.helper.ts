@@ -153,4 +153,22 @@ export class BitcoinRPCUtil {
             },
         });
     }
+
+    getBlockHash(height: number): Promise<string> {
+        return this.request({
+            data: {
+                method: 'getblockhash',
+                params: [height],
+            },
+        });
+    }
+
+    invalidateBlock(blockHash: string): Promise<any> {
+        return this.request({
+            data: {
+                method: 'invalidateblock',
+                params: [blockHash],
+            },
+        });
+    }
 }
