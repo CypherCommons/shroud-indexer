@@ -9,9 +9,9 @@
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
-    "start:dev": "NODE_ENV=dev nest start --watch",
-    "start:debug": "NODE_ENV=dev nest start --debug --watch",
-    "start:e2e": "NODE_ENV=e2e nest start",
+    "start:dev": "cross-env NODE_ENV=dev nest start --watch",
+    "start:debug": "cross-env NODE_ENV=dev nest start --debug --watch",
+    "start:e2e": "cross-env NODE_ENV=e2e nest start",
     "start:prod": "node dist/main",
     "format:check": "prettier --check \"src/**/*.ts\"",
     "format:fix": "prettier --write --loglevel=silent \"src/**/*.ts\"",
@@ -22,7 +22,7 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": " NODE_ENV=e2e node --trace-warnings node_modules/.bin/jest --runInBand --no-cache --forceExit --config jest-e2e.config.ts"
+    "test:e2e": "cross-env NODE_ENV=e2e node --trace-warnings node_modules/.bin/jest --runInBand --no-cache --forceExit --config jest-e2e.config.ts"
   },
   "dependencies": {
     "@nestjs/cache-manager": "^3.0.1",
@@ -81,6 +81,7 @@
     "run-script-webpack-plugin": "^0.2.0",
     "source-map-support": "^0.5.20",
     "supertest": "^6.3.4",
+    "cross-env": "^7.0.3",
     "tiny-secp256k1": "^2.2.3",
     "ts-jest": "29.0.5",
     "ts-loader": "^9.2.3",
@@ -106,7 +107,7 @@
   "lint-staged": {
     "*.ts": [
       "eslint --fix",
-      "bash -c 'npm run types:check'"
+      "npm run types:check"
     ],
     "*.{ts,yaml,json}": [
       "prettier --write"

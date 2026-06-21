@@ -1,5 +1,5 @@
 db:
-  path: '~/.silent-pay-indexer/db/lmdb'
+  path: './data/silent-pay-indexer-lmdb'
   mapSize: 10737418240 # 10 GB — LMDB pre-configured max; grows lazily
 app:
   port: 80

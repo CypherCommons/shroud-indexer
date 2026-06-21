@@ -1,8 +1,9 @@
 import { LoggerService } from '@nestjs/common';
 import { createWriteStream, existsSync, mkdirSync, WriteStream } from 'fs';
+import { join } from 'path';
 
 export class FileLogger implements LoggerService {
-    private logFolderPath = `${__dirname}/.logs`;
+    private logFolderPath = join(__dirname, '.logs');
     private logFilePath: string;
     private logFileStream: WriteStream;
 
@@ -11,7 +12,7 @@ export class FileLogger implements LoggerService {
             mkdirSync(this.logFolderPath, { recursive: true });
         }
 
-        this.logFilePath = `${this.logFolderPath}/${logFile}.log`;
+        this.logFilePath = join(this.logFolderPath, `${logFile}.log`);
         this.logFileStream = createWriteStream(this.logFilePath, {
             flags: 'a',
         });
