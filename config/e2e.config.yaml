@@ -1,5 +1,5 @@
 db:
-  path: '/tmp/silent-pay-indexer-e2e-lmdb'
+  path: './tmp/silent-pay-indexer-e2e-lmdb'
   mapSize: 1073741824 # 1 GB — small map for e2e tests
 app:
   port: 3000
