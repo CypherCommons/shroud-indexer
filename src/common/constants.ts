@@ -12,3 +12,17 @@ export const BITCOIN_CORE_FULL_VERBOSITY_VERSION = 23_0000;
 export const SILENT_PAYMENT_BLOCK_TYPE = 0x00;
 
 export const MAX_BLOCK_RANGE = 50;
+
+/**
+ * Blocks accumulated into a single LMDB write transaction while catching up.
+ *
+ * `out:` keys are prefixed by raw txid, so inserts land all over the B+tree and
+ * every commit rewrites the copy-on-write path from the root down to each leaf.
+ * Batching amortises those shared interior pages: measured at ~5x less commit
+ * time per block versus committing each block on its own, with returns
+ * flattening out past ~25.
+ *
+ * Only applies to catch-up. At the tip there is one block to write, so the
+ * batch is naturally a single block and visibility is unaffected.
+ */
+export const DEFAULT_COMMIT_BATCH_BLOCKS = 25;

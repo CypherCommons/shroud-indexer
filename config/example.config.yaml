@@ -1,6 +1,10 @@
 db:
   path: '~/.silent-pay-indexer/db/lmdb'
   mapSize: 10737418240 # 10 GB — LMDB pre-configured max; grows lazily
+  # Blocks per write transaction while catching up. Larger batches amortise
+  # the B+tree pages every commit rewrites; a crash re-indexes at most this
+  # many blocks. Ignored at the tip, where there is one block to write.
+  commitBatchBlocks: 25
 app:
   port: 80
   # Interface to bind to. Omit (or use 0.0.0.0) to listen on all interfaces;

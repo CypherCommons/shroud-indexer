@@ -24,6 +24,11 @@ class DbConfig {
     @IsInt()
     @Min(1)
     mapSize: number;
+
+    @IsOptional()
+    @IsInt()
+    @Min(1)
+    commitBatchBlocks?: number;
 }
 
 class AxiosRetryConfig {
