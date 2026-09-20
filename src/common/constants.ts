@@ -18,11 +18,16 @@ export const MAX_BLOCK_RANGE = 50;
  *
  * `out:` keys are prefixed by raw txid, so inserts land all over the B+tree and
  * every commit rewrites the copy-on-write path from the root down to each leaf.
- * Batching amortises those shared interior pages: measured at ~5x less commit
- * time per block versus committing each block on its own, with returns
- * flattening out past ~25.
+ * Batching amortises those shared interior pages.
+ *
+ * 5 is where the benefit saturates in production: commit cost per block was
+ * 25.8s at 1 block, 14.6s at 5, and 14.3s at 25 -- so 5 captures effectively
+ * all of the win while holding a fifth of the pending writes in memory,
+ * re-indexing a fifth as much after a crash, and making blocks visible five
+ * times sooner. (A local benchmark on a database small enough to stay in page
+ * cache suggested 25 was better; production, where it does not fit, disagreed.)
  *
  * Only applies to catch-up. At the tip there is one block to write, so the
  * batch is naturally a single block and visibility is unaffected.
  */
-export const DEFAULT_COMMIT_BATCH_BLOCKS = 25;
+export const DEFAULT_COMMIT_BATCH_BLOCKS = 5;
