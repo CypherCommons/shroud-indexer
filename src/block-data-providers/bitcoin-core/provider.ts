@@ -208,6 +208,15 @@ export class BitcoinCoreProvider
                                 );
                             }
 
+                            this.saveSpentIndex(
+                                batch,
+                                h,
+                                blockHash,
+                                blockTime,
+                                0,
+                                transactions.map((tx) => tx.vin),
+                            );
+
                             // Written per block, not once per batch: traceReorg
                             // walks block state one height at a time, so every
                             // height needs its own record.

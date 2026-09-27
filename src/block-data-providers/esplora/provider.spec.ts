@@ -8,19 +8,32 @@ import { BlockStateService } from '@/block-state/block-state.service';
 import { DbTransactionService } from '@/db-transaction/db-transaction.service';
 import { StorageService } from '@/storage/storage.service';
 
-// Coinbase first, as Esplora returns them. With a batch size of 2 both blocks
-// span several fetch batches.
+// Coinbase first, as Esplora returns them. With a batch size of 2 the first
+// two blocks span several fetch batches; the third has only its coinbase.
 const blockTxids = new Map<string, string[]>([
     ['hash1', ['cb1', 'a', 'b', 'c', 'd', 'e']],
     ['hash2', ['cb2', 'f', 'g', 'h', 'i']],
+    ['hash3', ['cb3']],
 ]);
+
+const expectedWrites = [
+    { txids: ['a', 'b', 'c', 'd', 'e'], spentChunks: [0], savedHeight: 1 },
+    { txids: ['f', 'g', 'h', 'i'], spentChunks: [0], savedHeight: 2 },
+    { txids: [], spentChunks: [0], savedHeight: 3 },
+];
 
 describe('Esplora Provider', () => {
     let provider: EsploraProvider;
     let state: Record<string, number>;
-    // One entry per write transaction: what it indexed and the height it saved.
-    let writes: { txids: string[]; savedHeight?: number }[];
-    let current: { txids: string[]; savedHeight?: number };
+    // One entry per write transaction: what it indexed, the spent index
+    // chunks it wrote and the height it saved.
+    type Write = {
+        txids: string[];
+        spentChunks: number[];
+        savedHeight?: number;
+    };
+    let writes: Write[];
+    let current: Write;
     let getTx: jest.SpyInstance;
 
     beforeEach(async () => {
@@ -64,7 +77,7 @@ describe('Esplora Provider', () => {
                     provide: DbTransactionService,
                     useValue: {
                         execute: jest.fn(async (fn) => {
-                            current = { txids: [] };
+                            current = { txids: [], spentChunks: [] };
                             await fn({});
                             writes.push(current);
                         }),
@@ -79,6 +92,9 @@ describe('Esplora Provider', () => {
                             current.savedHeight = s.indexedBlockHeight;
                         }),
                         saveBlockState: jest.fn(),
+                        saveSpentIndex: jest.fn((_batch, _height, chunk) => {
+                            current.spentChunks.push(chunk);
+                        }),
                     },
                 },
             ],
@@ -86,7 +102,7 @@ describe('Esplora Provider', () => {
 
         provider = module.get<EsploraProvider>(EsploraProvider);
 
-        jest.spyOn(provider as any, 'getTipHeight').mockResolvedValue(2);
+        jest.spyOn(provider as any, 'getTipHeight').mockResolvedValue(3);
         jest.spyOn(provider, 'traceReorg').mockResolvedValue(null);
         jest.spyOn(provider, 'getBlockHash').mockImplementation(
             async (height: number) => `hash${height}`,
@@ -94,6 +110,7 @@ describe('Esplora Provider', () => {
         jest.spyOn(provider as any, 'getTxidsForBlock').mockImplementation(
             async (hash: string) => blockTxids.get(hash),
         );
+        jest.spyOn(provider as any, 'getBlockTime').mockResolvedValue(0);
         getTx = jest
             .spyOn(provider as any, 'getTx')
             .mockImplementation(async (txid: string) => ({
@@ -107,10 +124,7 @@ describe('Esplora Provider', () => {
     it('indexes every non-coinbase tx of each block in one write per block', async () => {
         await provider.sync();
 
-        expect(writes).toEqual([
-            { txids: ['a', 'b', 'c', 'd', 'e'], savedHeight: 1 },
-            { txids: ['f', 'g', 'h', 'i'], savedHeight: 2 },
-        ]);
+        expect(writes).toEqual(expectedWrites);
     });
 
     it('leaves a block unindexed when a fetch fails, then indexes it whole', async () => {
@@ -122,9 +136,6 @@ describe('Esplora Provider', () => {
 
         await provider.sync();
 
-        expect(writes).toEqual([
-            { txids: ['a', 'b', 'c', 'd', 'e'], savedHeight: 1 },
-            { txids: ['f', 'g', 'h', 'i'], savedHeight: 2 },
-        ]);
+        expect(writes).toEqual(expectedWrites);
     });
 });

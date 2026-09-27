@@ -4,15 +4,38 @@ import {
     Get,
     Param,
     ParseIntPipe,
+    Query,
     Res,
     UseInterceptors,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { SilentBlocksService } from '@/silent-blocks/silent-blocks.service';
+import { TransactionsService } from '@/transactions/transactions.service';
+import { assertBlockRange } from '@/common/common';
 
 @Controller('silent-block')
 export class SilentBlocksController {
-    constructor(private readonly silentBlocksService: SilentBlocksService) {}
+    constructor(
+        private readonly silentBlocksService: SilentBlocksService,
+        private readonly transactionsService: TransactionsService,
+    ) {}
+
+    @Get('spent-index/range')
+    @UseInterceptors(CacheInterceptor)
+    async getSpentIndexByRange(
+        @Query('startHeight', ParseIntPipe) startHeight: number,
+        @Query('endHeight', ParseIntPipe) endHeight: number,
+    ) {
+        assertBlockRange(startHeight, endHeight);
+
+        const blocks =
+            await this.transactionsService.getSpentIndexByHeightRange(
+                startHeight,
+                endHeight,
+            );
+
+        return { blocks };
+    }
 
     @Get('height/:height')
     @UseInterceptors(CacheInterceptor)

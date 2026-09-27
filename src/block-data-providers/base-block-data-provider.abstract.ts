@@ -13,6 +13,7 @@ import { StorageService } from '@/storage/storage.service';
 import { TransactionData } from '@/storage/interfaces';
 import { BitcoinNetwork } from '@/common/enum';
 import { BIP352_ACTIVATION_HEIGHT } from '@/common/constants';
+import { isP2TR, spentOutpointHash } from '@/common/common';
 
 /** A confirmed transaction in the shape the scan-tweak derivation needs. */
 export type ProviderTransaction = {
@@ -53,6 +54,37 @@ export abstract class BaseBlockDataProvider<OperationState> {
             blockHash,
             blockTime,
             batch,
+        );
+    }
+
+    /**
+     * Stores the spent index for a run of txs in a block. Only taproot
+     * prevouts are hashed: silent payment outputs are always P2TR.
+     */
+    saveSpentIndex(
+        batch: BatchWriter,
+        height: number,
+        blockHash: string,
+        blockTime: number,
+        chunk: number,
+        vins: TransactionInput[][],
+    ): void {
+        const hashes: Buffer[] = [];
+        for (const vin of vins) {
+            for (const input of vin) {
+                if (isP2TR(input.prevOutScript)) {
+                    hashes.push(
+                        spentOutpointHash(input.txid, input.vout, blockHash),
+                    );
+                }
+            }
+        }
+        this.storageService.saveSpentIndex(
+            batch,
+            height,
+            chunk,
+            blockTime,
+            Buffer.concat(hashes),
         );
     }
 

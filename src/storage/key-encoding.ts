@@ -14,6 +14,11 @@ const PREFIX = {
     HEIGHT_IDX: Buffer.from('idx:h:'),
     HASH_IDX: Buffer.from('idx:bh:'),
     TIME_IDX: Buffer.from('idx:bt:'),
+    // `idx:sp:<height><chunk>` -> u32 block time + concatenated 8-byte spent
+    // outpoint hashes.
+    // Chunked because Esplora commits a block in several tx batches; the
+    // chunk is the index of the batch's first tx.
+    SPENT_IDX: Buffer.from('idx:sp:'),
     BLOCK_STATE: Buffer.from('bs:'),
     OP_STATE: Buffer.from('os:'),
     META: Buffer.from('meta:'),
@@ -147,6 +152,14 @@ export function decodeOutputValue(buf: Buffer): {
     return { pubKey, value };
 }
 
+export function encodeSpentIndexKey(height: number, chunk: number): Buffer {
+    return Buffer.concat([
+        PREFIX.SPENT_IDX,
+        encodeUInt32(height),
+        encodeUInt32(chunk),
+    ]);
+}
+
 // --- Key decoders ---
 
 export function decodeOutputKey(key: Buffer): {
@@ -177,6 +190,10 @@ export function decodeTimeIndexKey(key: Buffer): {
     const blockTime = data.readUInt32BE(0);
     const blockHeight = data.readUInt32BE(4);
     return { blockTime, blockHeight };
+}
+
+export function decodeSpentIndexKey(key: Buffer): number {
+    return key.readUInt32BE(PREFIX.SPENT_IDX.length);
 }
 
 export function decodeBlockStateKey(key: Buffer): number {
@@ -215,6 +232,17 @@ function bigEndianIncrement(buf: Buffer): Buffer {
     throw new Error(
         `bigEndianIncrement: input is all 0xFF, cannot compute successor`,
     );
+}
+
+/** Spent index range: every chunk across a block height span [start, end] */
+export function spentSpanRange(
+    startHeight: number,
+    endHeight: number,
+): { gte: Buffer; lt: Buffer } {
+    return {
+        gte: Buffer.concat([PREFIX.SPENT_IDX, encodeUInt32(startHeight)]),
+        lt: Buffer.concat([PREFIX.SPENT_IDX, encodeUInt32(endHeight + 1)]),
+    };
 }
 
 /** Height index range: all txids across a block height span [start, end] */

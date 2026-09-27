@@ -155,7 +155,10 @@ export class EsploraProvider
         const state = await this.getState();
 
         try {
-            const txids = await this.getTxidsForBlock(hash);
+            const [txids, blockTime] = await Promise.all([
+                this.getTxidsForBlock(hash),
+                this.getBlockTime(hash),
+            ]);
 
             // Fetched batchSize at a time to bound concurrent requests, but
             // written in one transaction with the block state: readers never
@@ -174,6 +177,8 @@ export class EsploraProvider
             }
 
             await this.dbTransactionService.execute(async (batch) => {
+                const vins: TransactionInput[][] = [];
+
                 for (const tx of txs) {
                     const vin: TransactionInput[] = tx.vin.map((input) => ({
                         txid: input.txid,
@@ -182,6 +187,7 @@ export class EsploraProvider
                         prevOutScript: input.prevout.scriptpubkey,
                         witness: input.witness,
                     }));
+                    vins.push(vin);
 
                     const vout = tx.vout.map((output) => ({
                         scriptPubKey: output.scriptpubkey,
@@ -194,10 +200,13 @@ export class EsploraProvider
                         vout,
                         height,
                         hash,
-                        tx.status.block_time,
+                        blockTime,
                         batch,
                     );
                 }
+
+                // The whole block is one write, so one chunk, as with Core.
+                this.saveSpentIndex(batch, height, hash, blockTime, 0, vins);
 
                 state.indexedBlockHeight = height;
                 await this.setState(
@@ -273,6 +282,18 @@ export class EsploraProvider
         throw new NotImplementedException(
             'Lookup by txid requires the Bitcoin Core provider',
         );
+    }
+
+    private async getBlockTime(hash: string): Promise<number> {
+        const block: { timestamp: number } = await makeRequest(
+            {
+                method: 'GET',
+                url: `${this.baseUrl}/block/${hash}`,
+            },
+            this.retryConfig,
+            this.logger,
+        );
+        return block.timestamp;
     }
 
     private async getTx(txid: string): Promise<EsploraTransaction> {
