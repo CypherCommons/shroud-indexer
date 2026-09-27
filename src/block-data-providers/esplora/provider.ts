@@ -168,6 +168,8 @@ export class EsploraProvider
 
             try {
                 await this.dbTransactionService.execute(async (batch) => {
+                    const vins: TransactionInput[][] = [];
+                    let blockTime = 0;
                     await Promise.all(
                         txBatch.map(async (txid) => {
                             const tx = await this.getTx(txid);
@@ -180,6 +182,8 @@ export class EsploraProvider
                                     witness: input.witness,
                                 }),
                             );
+                            vins.push(vin);
+                            blockTime = tx.status.block_time;
 
                             const vout = tx.vout.map((output) => ({
                                 scriptPubKey: output.scriptpubkey,
@@ -196,6 +200,15 @@ export class EsploraProvider
                                 batch,
                             );
                         }, this),
+                    );
+
+                    this.saveSpentIndex(
+                        batch,
+                        height,
+                        hash,
+                        blockTime,
+                        i,
+                        vins,
                     );
 
                     state.indexedBlockHeight = height;

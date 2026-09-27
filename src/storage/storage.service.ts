@@ -7,6 +7,7 @@ import {
     OutputData,
     BlockStateData,
     OperationStateData,
+    SpentIndexData,
 } from '@/storage/interfaces';
 import {
     encodeTxKey,
@@ -26,6 +27,11 @@ import {
     encodeBlockStateKey,
     decodeBlockStateKey,
     encodeOpStateKey,
+    encodeSpentIndexKey,
+    encodeUInt32,
+    decodeUInt32,
+    decodeSpentIndexKey,
+    spentSpanRange,
     heightSpanRange,
     outputPrefixRange,
     blockStateRange,
@@ -117,6 +123,51 @@ export class StorageService {
             );
         }
         return transactions;
+    }
+
+    /** Heights with no taproot inputs have no entry. */
+    async getSpentIndexByHeightRange(
+        startHeight: number,
+        endHeight: number,
+    ): Promise<SpentIndexData[]> {
+        const chunks: { height: number; value: Buffer }[] = [];
+        for (const span of this.partitions.splitRange(startHeight, endHeight)) {
+            chunks.push(
+                ...this.withPartition(span.lo, (db) =>
+                    collectRange(
+                        db,
+                        spentSpanRange(span.lo, span.hi),
+                        (key, value) => ({
+                            height: decodeSpentIndexKey(key),
+                            value,
+                        }),
+                    ),
+                ),
+            );
+        }
+
+        const byHeight = new Map<number, Buffer[]>();
+        for (const { height, value } of chunks) {
+            if (!byHeight.has(height)) byHeight.set(height, []);
+            byHeight.get(height).push(value);
+        }
+
+        return this.withGlobal((db) => {
+            const result: SpentIndexData[] = [];
+            for (const [height, values] of byHeight) {
+                const hash = get(db, encodeBlockStateKey(height));
+                if (!hash) continue;
+                result.push({
+                    height,
+                    blockHash: hash.toString('hex'),
+                    blockTime: decodeUInt32(values[0]),
+                    hashes: Buffer.concat(
+                        values.map((v) => v.subarray(4)),
+                    ).toString('hex'),
+                });
+            }
+            return result;
+        });
     }
 
     async getTransactionsByBlockHash(
@@ -212,6 +263,25 @@ export class StorageService {
             this.partitions.acquireGlobal(),
             encodeTimeIndexKey(tx.blockTime, tx.blockHeight),
             EMPTY,
+        );
+    }
+
+    /**
+     * Saves one chunk of a block's spent index. `chunk` is the index of the
+     * first tx it covers, so a replayed batch overwrites its own chunk.
+     */
+    saveSpentIndex(
+        batch: BatchWriter,
+        height: number,
+        chunk: number,
+        blockTime: number,
+        hashes: Buffer,
+    ): void {
+        if (hashes.length === 0) return;
+        batch.put(
+            this.partitions.acquirePartition(height),
+            encodeSpentIndexKey(height, chunk),
+            Buffer.concat([encodeUInt32(blockTime), hashes]),
         );
     }
 
@@ -372,6 +442,16 @@ export class StorageService {
         const entries = collectRange(part.db, heightSpanRange(lo, hi), (key) =>
             decodeHeightIndexKey(key),
         );
+
+        // Walked on its own: a block can spend taproot inputs without having
+        // a single eligible tx, so these keys are not reachable via `idx:h:`.
+        for (const key of collectRange(
+            part.db,
+            spentSpanRange(lo, hi),
+            (key) => key,
+        )) {
+            batch.del(part, key);
+        }
 
         for (const { height, txid } of entries) {
             const txBuf = get(part.db, encodeTxKey(txid));

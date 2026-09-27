@@ -286,6 +286,87 @@ describe('StorageService', () => {
         });
     });
 
+    describe('spent index', () => {
+        const hashes = (...n: number[]) =>
+            Buffer.from(
+                n.map((x) => x.toString(16).padStart(16, '0')).join(''),
+                'hex',
+            );
+
+        const saveSpent = async (
+            height: number,
+            blockHash: string,
+            chunks: [number, Buffer][],
+        ) => {
+            const batch = storage.createBatch();
+            for (const [chunk, buf] of chunks) {
+                storage.saveSpentIndex(
+                    batch,
+                    height,
+                    chunk,
+                    1000 + height,
+                    buf,
+                );
+            }
+            storage.saveBlockState(batch, { blockHeight: height, blockHash });
+            await batch.commit();
+        };
+
+        it('joins every chunk of a block and skips heights with none', async () => {
+            await saveSpent(10, hash(1), [
+                [1, hashes(1, 2)],
+                [26, hashes(3)],
+            ]);
+            await saveSpent(11, hash(2), [[1, Buffer.alloc(0)]]);
+            await saveSpent(12, hash(3), [[1, hashes(4)]]);
+
+            expect(await storage.getSpentIndexByHeightRange(9, 13)).toEqual([
+                {
+                    height: 10,
+                    blockHash: hash(1),
+                    blockTime: 1010,
+                    hashes: hashes(1, 2, 3).toString('hex'),
+                },
+                {
+                    height: 12,
+                    blockHash: hash(3),
+                    blockTime: 1012,
+                    hashes: hashes(4).toString('hex'),
+                },
+            ]);
+        });
+
+        it('is deleted with its block on reorg, even with no eligible txs', async () => {
+            await saveSpent(10, hash(1), [[0, hashes(1)]]);
+            await saveSpent(11, hash(2), [[0, hashes(2)]]);
+
+            const batch = storage.createBatch();
+            await storage.deleteTransactionsAtBlockHash(batch, hash(1));
+            await batch.commit();
+
+            expect(
+                (await storage.getSpentIndexByHeightRange(10, 11)).map(
+                    (b) => b.height,
+                ),
+            ).toEqual([11]);
+        });
+
+        it('is purged above the indexed tip', async () => {
+            await saveSpent(6, hash(1), [[0, hashes(1)]]);
+            await saveSpent(7, hash(2), [[0, hashes(2)]]);
+
+            const batch = storage.createBatch();
+            storage.purgeAboveHeight(batch, 6);
+            await batch.commit();
+
+            expect(
+                (await storage.getSpentIndexByHeightRange(6, 7)).map(
+                    (b) => b.height,
+                ),
+            ).toEqual([6]);
+        });
+    });
+
     describe('partitioning', () => {
         // The spec runs with db.partitionBlocks = 5.
 

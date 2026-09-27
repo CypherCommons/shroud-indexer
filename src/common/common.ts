@@ -1,6 +1,7 @@
 import { createHash } from 'crypto';
 import { publicKeyVerify } from 'secp256k1';
-import { NUMS_H, SATS_PER_BTC } from '@/common/constants';
+import { BadRequestException } from '@nestjs/common';
+import { MAX_BLOCK_RANGE, NUMS_H, SATS_PER_BTC } from '@/common/constants';
 import * as currency from 'currency.js';
 
 export const camelToSnakeCase = (inputString: string) => {
@@ -164,4 +165,44 @@ export const btcToSats = (amount: number): number => {
  */
 export const isP2TR = (scriptPubKey: string): boolean => {
     return scriptPubKey.length === 68 && scriptPubKey.startsWith('5120');
+};
+
+/**
+ * BlindBit/spdk spent index entry: sha256(txid || vout || blockhash)[:8], with
+ * txid and blockhash in internal byte order (reversed from display hex) and
+ * vout as u32 LE. The wallet hashes its own outpoints the same way and matches
+ * locally, so which outpoints it owns never leaves the device.
+ */
+export const spentOutpointHash = (
+    txid: string,
+    vout: number,
+    blockHash: string,
+): Buffer => {
+    const voutBuf = Buffer.alloc(4);
+    voutBuf.writeUInt32LE(vout);
+    return createHash('sha256')
+        .update(Buffer.from(txid, 'hex').reverse())
+        .update(voutBuf)
+        .update(Buffer.from(blockHash, 'hex').reverse())
+        .digest()
+        .subarray(0, 8);
+};
+
+/** Validates an inclusive height range query. Throws a 400 on bad input. */
+export const assertBlockRange = (startHeight: number, endHeight: number) => {
+    if (startHeight < 0 || endHeight < 0) {
+        throw new BadRequestException('Block heights must be non-negative');
+    }
+
+    if (startHeight > endHeight) {
+        throw new BadRequestException(
+            'startHeight must be less than or equal to endHeight',
+        );
+    }
+
+    if (endHeight - startHeight + 1 > MAX_BLOCK_RANGE) {
+        throw new BadRequestException(
+            `Range too large. Maximum allowed range is ${MAX_BLOCK_RANGE} blocks`,
+        );
+    }
 };

@@ -1,4 +1,9 @@
-import { btcToSats, extractPubKeyFromScript, isP2TR } from '@/common/common';
+import {
+    btcToSats,
+    extractPubKeyFromScript,
+    isP2TR,
+    spentOutpointHash,
+} from '@/common/common';
 
 describe('Common', () => {
     it.each([
@@ -257,5 +262,20 @@ describe('isP2TR', () => {
         { description: 'empty script', spk: '', expected: false },
     ])('should return $expected for $description', ({ spk, expected }) => {
         expect(isP2TR(spk)).toBe(expected);
+    });
+});
+
+describe('spentOutpointHash', () => {
+    // Reference computed with spdk's input_hashes_map layout
+    // (backend-blindbit-v1/src/utils.rs): sha256 over txid and blockhash in
+    // internal byte order with vout as u32 LE, first 8 bytes kept.
+    it('matches the spdk byte layout', () => {
+        expect(
+            spentOutpointHash(
+                'a2365547d16b555593e3f58a2b67143fc8ab84e7e1257b1c13d2a9a2ec3a2efb',
+                3,
+                '000000000000000000026d1e6d0e5a1c6a3f5a8d2b1e6b7c0c7a4c0d8e6f1a2b',
+            ).toString('hex'),
+        ).toBe('a235084cbd2d2ec4');
     });
 });
