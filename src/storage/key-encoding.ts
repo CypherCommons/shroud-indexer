@@ -17,6 +17,7 @@ const PREFIX = {
     BLOCK_STATE: Buffer.from('bs:'),
     OP_STATE: Buffer.from('os:'),
     META: Buffer.from('meta:'),
+    SILENT_BLOCK: Buffer.from('sb:'),
 } as const;
 
 // --- Shared scalar codec ---
@@ -256,5 +257,26 @@ export function timeIndexSeek(timestamp: number): {
     return {
         gte: Buffer.concat([PREFIX.TIME_IDX, encodeUInt32(timestamp + 1)]),
         lt: prefixUpperBound(PREFIX.TIME_IDX),
+    };
+}
+
+// --- Silent block blobs ---
+
+export function encodeSilentBlockKey(height: number): Buffer {
+    return Buffer.concat([PREFIX.SILENT_BLOCK, encodeUInt32(height)]);
+}
+
+export function decodeSilentBlockKey(key: Buffer): number {
+    return key.readUInt32BE(PREFIX.SILENT_BLOCK.length);
+}
+
+/** Silent block span range: all blobs across [startHeight, endHeight] */
+export function silentBlockSpanRange(
+    startHeight: number,
+    endHeight: number,
+): { gte: Buffer; lt: Buffer } {
+    return {
+        gte: encodeSilentBlockKey(startHeight),
+        lt: encodeSilentBlockKey(endHeight + 1),
     };
 }

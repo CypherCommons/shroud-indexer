@@ -2,7 +2,7 @@ import { UTXO, WalletHelper, AddressType } from '@e2e/helpers/wallet.helper';
 import { transactionToEntity } from '@e2e/helpers/common.helper';
 import { initialiseDep } from '@e2e/setup';
 import { ApiHelper } from '@e2e/helpers/api.helper';
-import { SilentBlocksService } from '@/silent-blocks/silent-blocks.service';
+import { encodeSilentBlock } from '@/silent-blocks/silent-block-encoder';
 
 describe('Indexer', () => {
     let apiHelper: ApiHelper;
@@ -57,11 +57,7 @@ describe('Indexer', () => {
                 outputs,
             );
 
-            const silentBlock = new SilentBlocksService(
-                {} as any,
-                {} as any,
-                {} as any,
-            ).encodeSilentBlock([transformedTransaction]);
+            const silentBlock = encodeSilentBlock([transformedTransaction]);
 
             // remove this once Web Socket is implemented
             await new Promise((resolve) => setTimeout(resolve, 15000));

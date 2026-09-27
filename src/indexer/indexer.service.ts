@@ -40,7 +40,7 @@ export class IndexerService {
         blockHash: string,
         blockTime: number,
         batch: BatchWriter,
-    ): Promise<void> {
+    ): Promise<TransactionData | null> {
         const transaction = this.buildTransactionData(
             txid,
             vin,
@@ -49,9 +49,10 @@ export class IndexerService {
             blockHash,
             blockTime,
         );
-        if (transaction === null) return;
+        if (transaction === null) return null;
 
         this.storageService.saveTransaction(batch, transaction);
+        return transaction;
     }
 
     /**

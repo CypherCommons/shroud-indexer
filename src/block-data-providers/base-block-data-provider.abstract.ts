@@ -36,6 +36,12 @@ export abstract class BaseBlockDataProvider<OperationState> {
         protected readonly storageService: StorageService,
     ) {}
 
+    /** Keeps a look-ahead rejection from going unhandled if it is never awaited. */
+    protected prefetch<T>(promise: Promise<T>): Promise<T> {
+        promise.catch(() => undefined);
+        return promise;
+    }
+
     async indexTransaction(
         txid: string,
         vin: TransactionInput[],
@@ -44,7 +50,7 @@ export abstract class BaseBlockDataProvider<OperationState> {
         blockHash: string,
         blockTime: number,
         batch: BatchWriter,
-    ): Promise<void> {
+    ): Promise<TransactionData | null> {
         return this.indexerService.index(
             txid,
             vin,

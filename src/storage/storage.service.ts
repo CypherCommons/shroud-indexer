@@ -30,6 +30,9 @@ import {
     outputPrefixRange,
     blockStateRange,
     timeIndexSeek,
+    encodeSilentBlockKey,
+    decodeSilentBlockKey,
+    silentBlockSpanRange,
 } from '@/storage/key-encoding';
 
 const EMPTY = Buffer.alloc(0);
@@ -168,6 +171,17 @@ export class StorageService {
         });
     }
 
+    getLowestBlockStateHeight(): number | null {
+        return this.withGlobal((db) => {
+            const results = collectRange(
+                db,
+                { ...blockStateRange(), limit: 1 },
+                (key) => decodeBlockStateKey(key),
+            );
+            return results.length > 0 ? results[0] : null;
+        });
+    }
+
     // --- Operation state ---
 
     async getOperationState(id: string): Promise<OperationStateData | null> {
@@ -289,6 +303,46 @@ export class StorageService {
         batch.del(this.partitions.acquireGlobal(), encodeBlockStateKey(height));
     }
 
+    // --- Silent block blobs ---
+    // Height-routed like transactions, so a reorg or purge that clears a
+    // height's partition data clears its blob in the same transaction.
+
+    saveSilentBlock(batch: BatchWriter, height: number, blob: Buffer): void {
+        batch.put(
+            this.partitions.acquirePartition(height),
+            encodeSilentBlockKey(height),
+            blob,
+        );
+    }
+
+    getSilentBlock(height: number): Buffer | null {
+        return this.withPartition(height, (db) =>
+            get(db, encodeSilentBlockKey(height)),
+        );
+    }
+
+    getSilentBlocksRange(
+        startHeight: number,
+        endHeight: number,
+    ): { height: number; blob: Buffer }[] {
+        const blobs: { height: number; blob: Buffer }[] = [];
+        for (const span of this.partitions.splitRange(startHeight, endHeight)) {
+            blobs.push(
+                ...this.withPartition(span.lo, (db) =>
+                    collectRange(
+                        db,
+                        silentBlockSpanRange(span.lo, span.hi),
+                        (key, blob) => ({
+                            height: decodeSilentBlockKey(key),
+                            blob,
+                        }),
+                    ),
+                ),
+            );
+        }
+        return blobs;
+    }
+
     // --- Private helpers ---
 
     private withPartition<T>(height: number, read: (db: Db) => T): T {
@@ -372,6 +426,16 @@ export class StorageService {
         const entries = collectRange(part.db, heightSpanRange(lo, hi), (key) =>
             decodeHeightIndexKey(key),
         );
+
+        // A block with no eligible transactions still has a blob, and has no
+        // `idx:h:` entries to find it by, so blobs get their own scan.
+        for (const key of collectRange(
+            part.db,
+            silentBlockSpanRange(lo, hi),
+            (key) => key,
+        )) {
+            batch.del(part, key);
+        }
 
         for (const { height, txid } of entries) {
             const txBuf = get(part.db, encodeTxKey(txid));

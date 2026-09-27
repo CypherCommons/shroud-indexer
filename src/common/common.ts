@@ -1,7 +1,42 @@
 import { createHash } from 'crypto';
+import { BadRequestException } from '@nestjs/common';
 import { publicKeyVerify } from 'secp256k1';
 import { NUMS_H, SATS_PER_BTC } from '@/common/constants';
 import * as currency from 'currency.js';
+
+// Height keys are 4-byte big-endian and span ranges encode `endHeight + 1`, so
+// a height outside this bound throws ERR_OUT_OF_RANGE from writeUInt32BE deep
+// inside key-encoding and surfaces as a 500. Reject it at the edge instead.
+export const MAX_INDEXED_HEIGHT = 0xfffffffe;
+
+export const assertHeight = (height: number, name = 'height'): void => {
+    if (
+        !Number.isInteger(height) ||
+        height < 0 ||
+        height > MAX_INDEXED_HEIGHT
+    ) {
+        throw new BadRequestException(
+            `${name} must be an integer between 0 and ${MAX_INDEXED_HEIGHT}`,
+        );
+    }
+};
+
+export const assertHeightRange = (
+    startHeight: number,
+    endHeight: number,
+    maxRange: number,
+): void => {
+    assertHeight(startHeight, 'startHeight');
+    assertHeight(endHeight, 'endHeight');
+    if (endHeight < startHeight) {
+        throw new BadRequestException('endHeight must be >= startHeight');
+    }
+    if (endHeight - startHeight + 1 > maxRange) {
+        throw new BadRequestException(
+            `Range exceeds maximum of ${maxRange} blocks`,
+        );
+    }
+};
 
 export const camelToSnakeCase = (inputString: string) => {
     return inputString
@@ -129,15 +164,15 @@ export const encodeVarInt = (
         return offset + 1;
     } else if (value <= 0xffff) {
         buffer.writeUInt8(0xfd, offset);
-        buffer.writeUInt16LE(value, offset + 2);
+        buffer.writeUInt16LE(value, offset + 1);
         return offset + 3;
     } else if (value <= 0xffffffff) {
         buffer.writeUInt8(0xfe, offset);
-        buffer.writeUInt32LE(value, offset + 4);
+        buffer.writeUInt32LE(value, offset + 1);
         return offset + 5;
     } else {
         buffer.writeUInt8(0xff, offset);
-        buffer.writeBigUInt64LE(BigInt(value), offset + 8);
+        buffer.writeBigUInt64LE(BigInt(value), offset + 1);
         return offset + 9;
     }
 };

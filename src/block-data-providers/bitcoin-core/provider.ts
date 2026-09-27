@@ -52,6 +52,8 @@ function isUnknownTransactionError(error: unknown): boolean {
     )?.response?.data?.error;
     return rpcError?.code === RPC_INVALID_ADDRESS_OR_KEY;
 }
+import { encodeSilentBlock } from '@/silent-blocks/silent-block-encoder';
+import { TransactionData } from '@/storage/interfaces';
 
 @Injectable()
 export class BitcoinCoreProvider
@@ -161,6 +163,12 @@ export class BitcoinCoreProvider
             let height =
                 ((await this.traceReorg()) ?? state.indexedBlockHeight) + 1;
 
+            // Fetch height + 1 while height is indexed, so the RPC round trip
+            // overlaps with the CPU-bound scan-tweak work.
+            let nextBlock = this.prefetch(
+                this.processBlock(height, verbosityLevel),
+            );
+
             while (height <= tipHeight) {
                 // One write transaction per run of blocks. Committing each
                 // block separately re-walks and rewrites the same B+tree
@@ -180,9 +188,16 @@ export class BitcoinCoreProvider
                     async (batch) => {
                         for (let h = height; h <= batchEnd; h++) {
                             const { transactions, blockHash, blockTime } =
-                                await timer.measureAsync('processBlock', () =>
-                                    this.processBlock(h, verbosityLevel),
+                                await timer.measureAsync(
+                                    'processBlock',
+                                    () => nextBlock,
                                 );
+                            if (h + 1 <= tipHeight) {
+                                nextBlock = this.prefetch(
+                                    this.processBlock(h + 1, verbosityLevel),
+                                );
+                            }
+                            const blockTxData: TransactionData[] = [];
 
                             for (const transaction of transactions) {
                                 const {
@@ -195,18 +210,27 @@ export class BitcoinCoreProvider
                                 timer.count('numTx');
                                 timer.count('numInputs', vin.length);
                                 timer.count('numOutputs', vout.length);
-                                await timer.measureAsync('index', () =>
-                                    this.indexTransaction(
-                                        txid,
-                                        vin,
-                                        vout,
-                                        blockHeight,
-                                        txBlockHash,
-                                        blockTime,
-                                        batch,
-                                    ),
+                                const txData = await timer.measureAsync(
+                                    'index',
+                                    () =>
+                                        this.indexTransaction(
+                                            txid,
+                                            vin,
+                                            vout,
+                                            blockHeight,
+                                            txBlockHash,
+                                            blockTime,
+                                            batch,
+                                        ),
                                 );
+                                if (txData) blockTxData.push(txData);
                             }
+
+                            this.storageService.saveSilentBlock(
+                                batch,
+                                h,
+                                encodeSilentBlock(blockTxData),
+                            );
 
                             // Written per block, not once per batch: traceReorg
                             // walks block state one height at a time, so every

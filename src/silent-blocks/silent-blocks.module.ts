@@ -4,9 +4,10 @@ import { SilentBlocksController } from '@/silent-blocks/silent-blocks.controller
 import { SilentBlocksService } from '@/silent-blocks/silent-blocks.service';
 import { SilentBlocksGateway } from '@/silent-blocks/silent-blocks.gateway';
 import { BlockStateModule } from '@/block-state/block-state.module';
+import { DbTransactionModule } from '@/db-transaction/db-transaction.module';
 
 @Module({
-    imports: [TransactionsModule, BlockStateModule],
+    imports: [TransactionsModule, BlockStateModule, DbTransactionModule],
     providers: [SilentBlocksService, SilentBlocksGateway],
     controllers: [SilentBlocksController],
     exports: [SilentBlocksService],

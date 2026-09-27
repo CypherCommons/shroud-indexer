@@ -1,4 +1,27 @@
-import { btcToSats, extractPubKeyFromScript, isP2TR } from '@/common/common';
+import {
+    btcToSats,
+    encodeVarInt,
+    extractPubKeyFromScript,
+    isP2TR,
+    varIntSize,
+} from '@/common/common';
+
+// Standard Bitcoin CompactSize reader, used to validate encodeVarInt output.
+const readCompactSize = (
+    buf: Buffer,
+    offset = 0,
+): { value: number; offset: number } => {
+    const first = buf.readUInt8(offset);
+    if (first < 0xfd) return { value: first, offset: offset + 1 };
+    if (first === 0xfd)
+        return { value: buf.readUInt16LE(offset + 1), offset: offset + 3 };
+    if (first === 0xfe)
+        return { value: buf.readUInt32LE(offset + 1), offset: offset + 5 };
+    return {
+        value: Number(buf.readBigUInt64LE(offset + 1)),
+        offset: offset + 9,
+    };
+};
 
 describe('Common', () => {
     it.each([
@@ -212,6 +235,57 @@ describe('Common', () => {
             expect(btcToSats(btc)).toBe(sats);
         },
     );
+
+    it.each([
+        { value: 0, size: 1, description: 'zero (single byte)' },
+        { value: 1, size: 1, description: 'one (single byte)' },
+        { value: 0xfc, size: 1, description: '252 (largest single byte)' },
+        { value: 0xfd, size: 3, description: '253 (smallest 0xfd marker)' },
+        { value: 300, size: 3, description: '300 (busy-block tx count)' },
+        { value: 0xffff, size: 3, description: '65535 (largest 0xfd marker)' },
+        {
+            value: 0x10000,
+            size: 5,
+            description: '65536 (smallest 0xfe marker)',
+        },
+        { value: 0xffffffff, size: 5, description: 'u32 max (0xfe marker)' },
+        {
+            value: 0x100000000,
+            size: 9,
+            description: 'u32 max + 1 (0xff marker)',
+        },
+    ])(
+        'should encode $value as a standard CompactSize: $description',
+        ({ value, size }) => {
+            expect(varIntSize(value)).toBe(size);
+
+            const buf = Buffer.alloc(size);
+            const next = encodeVarInt(value, buf, 0);
+
+            // Returned cursor matches the declared size.
+            expect(next).toBe(size);
+
+            // A standard CompactSize reader recovers the value and consumes
+            // exactly `size` bytes.
+            const decoded = readCompactSize(buf, 0);
+            expect(decoded.value).toBe(value);
+            expect(decoded.offset).toBe(size);
+        },
+    );
+
+    it('should not clobber a following field when writing a multi-byte count', () => {
+        // Reproduces the ≥253 corruption: encode a count, then write a sentinel
+        // immediately after. A correct encoder leaves the count intact.
+        const count = 300;
+        const buf = Buffer.alloc(varIntSize(count) + 1);
+        let cursor = encodeVarInt(count, buf, 0);
+        cursor = buf.writeUInt8(0xab, cursor);
+
+        const decoded = readCompactSize(buf, 0);
+        expect(decoded.value).toBe(count);
+        expect(buf.readUInt8(decoded.offset)).toBe(0xab);
+        expect(cursor).toBe(buf.length);
+    });
 });
 
 describe('isP2TR', () => {

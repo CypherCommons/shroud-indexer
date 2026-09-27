@@ -86,3 +86,4 @@ export const TXID_CACHE_TTL_MS = 3_600_000;
  */
 export const TXID_THROTTLE_TTL_MS = 1_000;
 export const TXID_THROTTLE_LIMIT = 2;
+export const MAX_SILENT_BLOCK_RANGE = 200;
