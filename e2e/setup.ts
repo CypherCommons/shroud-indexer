@@ -2,6 +2,7 @@ import { INestApplication, Logger } from '@nestjs/common';
 import { AppModule } from '@/app.module';
 import * as Docker from 'dockerode';
 import { NestFactory } from '@nestjs/core';
+import { WsAdapter } from '@nestjs/platform-ws';
 import { ConfigService } from '@nestjs/config';
 import { readFileSync, rmSync } from 'fs';
 import * as yaml from 'js-yaml';
@@ -100,6 +101,7 @@ async function setupTestApp(): Promise<INestApplication> {
     const app = await NestFactory.create(AppModule, {
         logger: new FileLogger('indexer'),
     });
+    app.useWebSocketAdapter(new WsAdapter(app));
 
     const configService = app.get<ConfigService>(ConfigService);
     const port = configService.get<number>('app.port');
