@@ -31,7 +31,7 @@ export function mergeEnvVariablesRecursive(
         } else if (typeof currentEnvVarValue !== 'undefined') {
             try {
                 config[key] = JSON.parse(currentEnvVarValue);
-            } catch (error) {
+            } catch {
                 config[key] = currentEnvVarValue;
             }
         }

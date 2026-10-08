@@ -1,4 +1,4 @@
-import { BIP32Interface, fromSeed } from 'bip32';
+import { BIP32Factory, BIP32Interface } from 'bip32';
 import * as ecc from 'tiny-secp256k1';
 import {
     initEccLib,
@@ -49,7 +49,10 @@ export class WalletHelper {
     private readonly bitcoinRPCUtil: BitcoinRPCUtil;
 
     constructor() {
-        this.root = fromSeed(randomBytes(64), networks.regtest);
+        this.root = BIP32Factory(ecc).fromSeed(
+            randomBytes(64),
+            networks.regtest,
+        );
         this.bitcoinRPCUtil = new BitcoinRPCUtil();
     }
 
