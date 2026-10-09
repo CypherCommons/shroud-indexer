@@ -312,7 +312,7 @@ describe('StorageService', () => {
             await batch.commit();
         };
 
-        it('joins every chunk of a block and skips heights with none', async () => {
+        it('joins every chunk of a block, keeps empty blocks and skips unindexed heights', async () => {
             await saveSpent(10, hash(1), [
                 [1, hashes(1, 2)],
                 [26, hashes(3)],
@@ -326,6 +326,12 @@ describe('StorageService', () => {
                     blockHash: hash(1),
                     blockTime: 1010,
                     hashes: hashes(1, 2, 3).toString('hex'),
+                },
+                {
+                    height: 11,
+                    blockHash: hash(2),
+                    blockTime: 1011,
+                    hashes: '',
                 },
                 {
                     height: 12,

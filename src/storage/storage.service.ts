@@ -125,7 +125,11 @@ export class StorageService {
         return transactions;
     }
 
-    /** Heights with no taproot inputs have no entry. */
+    /**
+     * Every block indexed with the spent index has an entry, with empty
+     * `hashes` if it spends no taproot inputs. A missing height was not
+     * indexed with it, so a wallet must not treat it as "nothing spent".
+     */
     async getSpentIndexByHeightRange(
         startHeight: number,
         endHeight: number,
@@ -269,6 +273,7 @@ export class StorageService {
     /**
      * Saves one chunk of a block's spent index. `chunk` is the index of the
      * first tx it covers, so a replayed batch overwrites its own chunk.
+     * Written even with no hashes, so the entry marks the block as indexed.
      */
     saveSpentIndex(
         batch: BatchWriter,
@@ -277,7 +282,6 @@ export class StorageService {
         blockTime: number,
         hashes: Buffer,
     ): void {
-        if (hashes.length === 0) return;
         batch.put(
             this.partitions.acquirePartition(height),
             encodeSpentIndexKey(height, chunk),
