@@ -1,7 +1,6 @@
 export interface EsploraOperationState {
     currentBlockHeight: number;
     indexedBlockHeight: number;
-    lastProcessedTxIndex: number;
 }
 
 type EsploraTransactionInput = {
