@@ -1,7 +1,6 @@
 import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
 import { Throttle } from '@nestjs/throttler';
 import {
-    BadRequestException,
     Controller,
     Get,
     NotFoundException,
@@ -11,8 +10,8 @@ import {
     UseInterceptors,
 } from '@nestjs/common';
 import { TransactionsService } from '@/transactions/transactions.service';
+import { assertBlockRange } from '@/common/common';
 import {
-    MAX_BLOCK_RANGE,
     TXID_CACHE_TTL_MS,
     TXID_THROTTLE_LIMIT,
     TXID_THROTTLE_TTL_MS,
@@ -41,21 +40,7 @@ export class TransactionController {
         @Query('startHeight', ParseIntPipe) startHeight: number,
         @Query('endHeight', ParseIntPipe) endHeight: number,
     ) {
-        if (startHeight < 0 || endHeight < 0) {
-            throw new BadRequestException('Block heights must be non-negative');
-        }
-
-        if (startHeight > endHeight) {
-            throw new BadRequestException(
-                'startHeight must be less than or equal to endHeight',
-            );
-        }
-
-        if (endHeight - startHeight + 1 > MAX_BLOCK_RANGE) {
-            throw new BadRequestException(
-                `Range too large. Maximum allowed range is ${MAX_BLOCK_RANGE} blocks`,
-            );
-        }
+        assertBlockRange(startHeight, endHeight);
 
         const transactions =
             await this.transactionsService.getTransactionsByBlockHeightRange(

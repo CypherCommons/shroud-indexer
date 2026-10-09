@@ -1,4 +1,9 @@
-import { btcToSats, extractPubKeyFromScript, isP2TR } from '@/common/common';
+import {
+    btcToSats,
+    extractPubKeyFromScript,
+    isP2TR,
+    spentOutpointHash,
+} from '@/common/common';
 
 describe('Common', () => {
     it.each([
@@ -257,5 +262,32 @@ describe('isP2TR', () => {
         { description: 'empty script', spk: '', expected: false },
     ])('should return $expected for $description', ({ spk, expected }) => {
         expect(isP2TR(spk)).toBe(expected);
+    });
+});
+
+describe('spentOutpointHash', () => {
+    // spdk's input_hashes_map layout (backend-blindbit-v1/src/utils.rs):
+    // sha256 over txid and blockhash in internal byte order with vout as
+    // u32 LE, first 8 bytes kept. Real Signet taproot spends, both in block
+    // 325319, so a wallet test can use the same outpoints.
+    it.each([
+        [
+            'aea2211b26f445057308975350d45c3b4fc67aa2f4f06df37556461b69ee4030',
+            0,
+            '2c479685c677110a',
+        ],
+        [
+            '4ea3326c47e6bf4168221c9344f67348c6102f0692b24401bc7b6edc0d74dfa3',
+            1,
+            '18528141b1385618',
+        ],
+    ])('matches the spdk byte layout for %s:%d', (txid, vout, expected) => {
+        expect(
+            spentOutpointHash(
+                txid,
+                vout,
+                '0000000ae277a40f13748dd2bc05dd6d74dd109922578b17d30a7852b54badb5',
+            ).toString('hex'),
+        ).toBe(expected);
     });
 });

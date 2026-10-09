@@ -23,3 +23,11 @@ export interface OperationStateData {
     id: string;
     state: any;
 }
+
+export interface SpentIndexData {
+    height: number;
+    blockHash: string;
+    blockTime: number;
+    /** Concatenated 8-byte spent outpoint hashes, hex. */
+    hashes: string;
+}

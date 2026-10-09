@@ -1,6 +1,6 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { StorageService } from '@/storage/storage.service';
-import { TransactionData } from '@/storage/interfaces';
+import { SpentIndexData, TransactionData } from '@/storage/interfaces';
 import { BaseBlockDataProvider } from '@/block-data-providers/base-block-data-provider.abstract';
 
 @Injectable()
@@ -22,6 +22,16 @@ export class TransactionsService {
         endHeight: number,
     ): Promise<TransactionData[]> {
         return this.storageService.getTransactionsByBlockHeightRange(
+            startHeight,
+            endHeight,
+        );
+    }
+
+    async getSpentIndexByHeightRange(
+        startHeight: number,
+        endHeight: number,
+    ): Promise<SpentIndexData[]> {
+        return this.storageService.getSpentIndexByHeightRange(
             startHeight,
             endHeight,
         );

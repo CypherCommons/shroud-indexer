@@ -103,7 +103,6 @@ export class EsploraProvider
                     {
                         currentBlockHeight: 0,
                         indexedBlockHeight,
-                        lastProcessedTxIndex: 0, // we don't take coinbase txn into account
                     },
                     { blockHash, blockHeight: indexedBlockHeight },
                     batch,
@@ -154,69 +153,78 @@ export class EsploraProvider
 
     private async processBlock(height: number, hash: string) {
         const state = await this.getState();
-        const txids = await this.getTxidsForBlock(hash);
 
-        for (
-            let i = state.lastProcessedTxIndex + 1;
-            i < txids.length;
-            i += this.batchSize
-        ) {
-            const txBatch = txids.slice(
-                i,
-                Math.min(i + this.batchSize, txids.length),
-            );
+        try {
+            const [txids, blockTime] = await Promise.all([
+                this.getTxidsForBlock(hash),
+                this.getBlockTime(hash),
+            ]);
 
-            try {
-                await this.dbTransactionService.execute(async (batch) => {
-                    await Promise.all(
-                        txBatch.map(async (txid) => {
-                            const tx = await this.getTx(txid);
-                            const vin: TransactionInput[] = tx.vin.map(
-                                (input) => ({
-                                    txid: input.txid,
-                                    vout: input.vout,
-                                    scriptSig: input.scriptsig,
-                                    prevOutScript: input.prevout.scriptpubkey,
-                                    witness: input.witness,
-                                }),
-                            );
+            // Fetched batchSize at a time to bound concurrent requests, but
+            // written in one transaction with the block state: readers never
+            // see a half-indexed block, and a failure mid-block leaves nothing
+            // behind, so the next sync indexes the block again from the start.
+            const txs: EsploraTransaction[] = [];
+            // Index 0 is the coinbase, which is never eligible.
+            for (let i = 1; i < txids.length; i += this.batchSize) {
+                txs.push(
+                    ...(await Promise.all(
+                        txids
+                            .slice(i, i + this.batchSize)
+                            .map((txid) => this.getTx(txid)),
+                    )),
+                );
+            }
 
-                            const vout = tx.vout.map((output) => ({
-                                scriptPubKey: output.scriptpubkey,
-                                value: output.value,
-                            }));
+            await this.dbTransactionService.execute(async (batch) => {
+                const vins: TransactionInput[][] = [];
 
-                            await this.indexTransaction(
-                                txid,
-                                vin,
-                                vout,
-                                height,
-                                hash,
-                                tx.status.block_time,
-                                batch,
-                            );
-                        }, this),
-                    );
+                for (const tx of txs) {
+                    const vin: TransactionInput[] = tx.vin.map((input) => ({
+                        txid: input.txid,
+                        vout: input.vout,
+                        scriptSig: input.scriptsig,
+                        prevOutScript: input.prevout.scriptpubkey,
+                        witness: input.witness,
+                    }));
+                    vins.push(vin);
 
-                    state.indexedBlockHeight = height;
-                    state.lastProcessedTxIndex = i + this.batchSize - 1;
-                    await this.setState(
-                        state,
-                        {
-                            blockHeight: height,
-                            blockHash: hash,
-                        },
+                    const vout = tx.vout.map((output) => ({
+                        scriptPubKey: output.scriptpubkey,
+                        value: output.value,
+                    }));
+
+                    await this.indexTransaction(
+                        tx.txid,
+                        vin,
+                        vout,
+                        height,
+                        hash,
+                        blockTime,
                         batch,
                     );
-                });
+                }
 
-                this.eventEmitter.emit(INDEXED_BLOCK_EVENT, height);
-            } catch (error) {
-                this.logger.error(
-                    `Error processing transactions in block at height ${height}, hash ${hash}: ${error.message}`,
+                // The whole block is one write, so one chunk, as with Core.
+                this.saveSpentIndex(batch, height, hash, blockTime, 0, vins);
+
+                state.indexedBlockHeight = height;
+                await this.setState(
+                    state,
+                    {
+                        blockHeight: height,
+                        blockHash: hash,
+                    },
+                    batch,
                 );
-                throw error;
-            }
+            });
+
+            this.eventEmitter.emit(INDEXED_BLOCK_EVENT, height);
+        } catch (error) {
+            this.logger.error(
+                `Error processing transactions in block at height ${height}, hash ${hash}: ${error.message}`,
+            );
+            throw error;
         }
     }
 
@@ -274,6 +282,18 @@ export class EsploraProvider
         throw new NotImplementedException(
             'Lookup by txid requires the Bitcoin Core provider',
         );
+    }
+
+    private async getBlockTime(hash: string): Promise<number> {
+        const block: { timestamp: number } = await makeRequest(
+            {
+                method: 'GET',
+                url: `${this.baseUrl}/block/${hash}`,
+            },
+            this.retryConfig,
+            this.logger,
+        );
+        return block.timestamp;
     }
 
     private async getTx(txid: string): Promise<EsploraTransaction> {
