@@ -3,6 +3,7 @@ import { transactionToEntity } from '@e2e/helpers/common.helper';
 import { initialiseDep } from '@e2e/setup';
 import { ApiHelper } from '@e2e/helpers/api.helper';
 import { SilentBlocksService } from '@/silent-blocks/silent-blocks.service';
+import { spentOutpointHash } from '@/common/common';
 
 describe('Indexer', () => {
     let apiHelper: ApiHelper;
@@ -73,6 +74,26 @@ describe('Indexer', () => {
             );
 
             expect(response.data).toEqual(silentBlock);
+
+            const { data } = await apiHelper.get(
+                `/silent-block/spent-index/range?startHeight=${blockCount}&endHeight=${blockCount}`,
+            );
+            expect(data.blocks).toHaveLength(1);
+            expect(data.blocks[0].blockHash).toBe(blockHash);
+
+            // Only taproot prevouts are indexed.
+            const indexed: string[] =
+                data.blocks[0].hashes.match(/.{16}/g) ?? [];
+            const spent = utxos.map((utxo) =>
+                spentOutpointHash(utxo.txid, utxo.vout, blockHash).toString(
+                    'hex',
+                ),
+            );
+            if (addressType === AddressType.P2TR) {
+                expect(indexed).toEqual(expect.arrayContaining(spent));
+            } else {
+                expect(indexed.filter((h) => spent.includes(h))).toEqual([]);
+            }
         },
     );
 });

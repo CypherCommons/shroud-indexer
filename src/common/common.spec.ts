@@ -266,16 +266,28 @@ describe('isP2TR', () => {
 });
 
 describe('spentOutpointHash', () => {
-    // Reference computed with spdk's input_hashes_map layout
-    // (backend-blindbit-v1/src/utils.rs): sha256 over txid and blockhash in
-    // internal byte order with vout as u32 LE, first 8 bytes kept.
-    it('matches the spdk byte layout', () => {
+    // spdk's input_hashes_map layout (backend-blindbit-v1/src/utils.rs):
+    // sha256 over txid and blockhash in internal byte order with vout as
+    // u32 LE, first 8 bytes kept. Real Signet taproot spends, both in block
+    // 325319, so a wallet test can use the same outpoints.
+    it.each([
+        [
+            'aea2211b26f445057308975350d45c3b4fc67aa2f4f06df37556461b69ee4030',
+            0,
+            '2c479685c677110a',
+        ],
+        [
+            '4ea3326c47e6bf4168221c9344f67348c6102f0692b24401bc7b6edc0d74dfa3',
+            1,
+            '18528141b1385618',
+        ],
+    ])('matches the spdk byte layout for %s:%d', (txid, vout, expected) => {
         expect(
             spentOutpointHash(
-                'a2365547d16b555593e3f58a2b67143fc8ab84e7e1257b1c13d2a9a2ec3a2efb',
-                3,
-                '000000000000000000026d1e6d0e5a1c6a3f5a8d2b1e6b7c0c7a4c0d8e6f1a2b',
+                txid,
+                vout,
+                '0000000ae277a40f13748dd2bc05dd6d74dd109922578b17d30a7852b54badb5',
             ).toString('hex'),
-        ).toBe('a235084cbd2d2ec4');
+        ).toBe(expected);
     });
 });
