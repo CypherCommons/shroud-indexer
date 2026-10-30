@@ -38,24 +38,27 @@ export function mergeEnvVariablesRecursive(
     }
 }
 
+export function validateConfig(config: Record<string, any>) {
+    const configInstance = plainToClass(Config, config, {
+        enableImplicitConversion: true,
+    });
+
+    // Missing keys must fail too: a required value that is absent (or
+    // misspelled) would otherwise skip every check on it.
+    const errors = validateSync(configInstance);
+
+    if (errors.length > 0) {
+        throw new Error(errors.toString());
+    }
+}
+
 export default () => {
     const config = load(readFileSync(getConfigFilePath(), 'utf8')) as Record<
         string,
         any
     >;
     mergeEnvVariablesRecursive(config);
-
-    const validateConfig = plainToClass(Config, config, {
-        enableImplicitConversion: true,
-    });
-
-    const errors = validateSync(validateConfig, {
-        skipMissingProperties: true,
-    });
-
-    if (errors.length > 0) {
-        throw new Error(errors.toString());
-    }
+    validateConfig(config);
 
     return config;
 };
