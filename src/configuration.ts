@@ -29,6 +29,13 @@ export function mergeEnvVariablesRecursive(
         if (config[key] && typeof config[key] === 'object') {
             mergeEnvVariablesRecursive(config[key], currentEnvVarName);
         } else if (typeof currentEnvVarValue !== 'undefined') {
+            // A string setting keeps the raw value. JSON.parse would turn a
+            // password like "1.50" or "true" into a number or a boolean.
+            if (typeof config[key] === 'string') {
+                config[key] = currentEnvVarValue;
+                continue;
+            }
+
             try {
                 config[key] = JSON.parse(currentEnvVarValue);
             } catch (error) {
