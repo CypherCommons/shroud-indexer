@@ -4,6 +4,7 @@ import { TransactionController } from '@/transactions/transactions.controller';
 import { TransactionsService } from '@/transactions/transactions.service';
 import { StorageService } from '@/storage/storage.service';
 import { TransactionData } from '@/storage/interfaces';
+import { BadRequestException } from '@nestjs/common';
 
 const mockTransactions: TransactionData[] = [
     {
@@ -166,7 +167,8 @@ describe('TransactionController', () => {
             transactionsService,
             'getTransactionByTxid',
         );
-        const txid = '1';
+        const txid =
+            '3e9fce73d4e77a4809908e3c3a2e54ee147b9312dc5044a193d1fc85de46e3c1';
         const controllerResult = await controller.getTransactionByTxid(txid);
 
         expect(getTransactionByTxidSpy).toHaveBeenCalledWith(txid);
@@ -175,4 +177,37 @@ describe('TransactionController', () => {
         ).toHaveBeenCalledWith(txid);
         expect(controllerResult).toEqual({ transaction: mockTransactions[0] });
     });
+
+    it.each([
+        { description: 'too short', txid: 'abc' },
+        { description: 'not hex', txid: 'z'.repeat(64) },
+        { description: 'too long', txid: 'a'.repeat(65) },
+    ])('should reject a txid that is $description', async ({ txid }) => {
+        mockBlockDataProvider.getTransactionForTweak.mockClear();
+
+        await expect(controller.getTransactionByTxid(txid)).rejects.toThrow(
+            BadRequestException,
+        );
+        expect(
+            mockBlockDataProvider.getTransactionForTweak,
+        ).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        { description: 'negative', timestamp: -1 },
+        { description: 'in milliseconds', timestamp: 1714634200000 },
+        { description: 'at the uint32 maximum', timestamp: 0xffffffff },
+    ])(
+        'should reject a timestamp that is $description',
+        async ({ timestamp }) => {
+            mockStorageService.getBlockHeightByTimestamp.mockClear();
+
+            await expect(
+                controller.getBlockHeightByTimestamp(timestamp),
+            ).rejects.toThrow(BadRequestException);
+            expect(
+                mockStorageService.getBlockHeightByTimestamp,
+            ).not.toHaveBeenCalled();
+        },
+    );
 });
