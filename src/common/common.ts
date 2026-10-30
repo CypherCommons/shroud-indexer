@@ -13,8 +13,8 @@ export const camelToSnakeCase = (inputString: string) => {
         .toUpperCase();
 };
 
-const verifyPubKey = (pubKey: Buffer): boolean => {
-    return pubKey.length === 33 && publicKeyVerify(pubKey);
+const verifyPubKey = (pubKey: Buffer | undefined): boolean => {
+    return pubKey?.length === 33 && publicKeyVerify(pubKey);
 };
 
 const hash160 = (buffer: Buffer): Buffer => {
@@ -77,8 +77,9 @@ export const extractPubKeyFromScript = (
         scriptPubKey[22] === 0x87
     ) {
         const redeemScript = scriptSig.subarray(1);
-        // check if redeemScript is P2WPKH
+        // check if scriptSig is a single push of a P2WPKH redeemScript
         if (
+            scriptSig[0] === 0x16 &&
             redeemScript.length === 22 &&
             redeemScript[0] === 0x00 &&
             redeemScript[1] === 0x14

@@ -162,6 +162,15 @@ describe('Common', () => {
             expected: null,
         },
         {
+            // push of 21 bytes that start with 00 14, then OP_0 pushing an
+            // empty redeemScript; looks like P2SH-P2WPKH but has no witness
+            description: 'P2SH - 23-byte scriptSig that is not a single push',
+            scriptPubKey: 'a914b472a266d0bd89c13706a4132ccfb16f7c3b9fcb87',
+            scriptSig: '15001419c2f3ae0ca3b642bd3e49598b8da89f50c14100',
+            witness: [],
+            expected: null,
+        },
+        {
             description: 'P2PKH - uncompressed key used',
             scriptPubKey: '76a914460e8b41545d2dbe7e0671f0f573e2232814260a88ac',
             scriptSig:
