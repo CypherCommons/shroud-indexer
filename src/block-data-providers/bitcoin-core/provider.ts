@@ -147,7 +147,13 @@ export class BitcoinCoreProvider
 
             const tipHeight = await this.getTipHeight();
 
-            if (tipHeight <= state.indexedBlockHeight) {
+            // Trace before comparing against the tip: a reorg that replaces
+            // the tip block leaves the height unchanged, and would otherwise
+            // go unnoticed until the next block arrives.
+            const indexedHeight =
+                (await this.traceReorg()) ?? state.indexedBlockHeight;
+
+            if (tipHeight <= indexedHeight) {
                 this.logger.debug(
                     `No new blocks found. Current tip height: ${tipHeight}`,
                 );
@@ -158,8 +164,7 @@ export class BitcoinCoreProvider
                 await this.getNodeVersion(),
             );
 
-            let height =
-                ((await this.traceReorg()) ?? state.indexedBlockHeight) + 1;
+            let height = indexedHeight + 1;
 
             while (height <= tipHeight) {
                 // One write transaction per run of blocks. Committing each

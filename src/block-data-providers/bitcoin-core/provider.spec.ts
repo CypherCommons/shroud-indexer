@@ -13,6 +13,7 @@ import {
 } from '@/block-data-providers/bitcoin-core/provider-fixtures';
 import {
     BIP352_ACTIVATION_HEIGHT,
+    BITCOIN_CORE_FULL_VERBOSITY_VERSION,
     BITCOIN_CORE_PREVOUT_RAWTX_VERSION,
 } from '@/common/constants';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -119,6 +120,57 @@ describe('Bitcoin Core Provider', () => {
         expect(transactions).toEqual(
             expect.arrayContaining([...parsedTransactions.values()]),
         );
+    });
+
+    describe('sync', () => {
+        let processBlock: jest.SpyInstance;
+        let traceReorg: jest.SpyInstance;
+
+        beforeEach(() => {
+            jest.spyOn(provider, 'getState').mockResolvedValue({
+                indexedBlockHeight: 3,
+            });
+            jest.spyOn(provider, 'setState').mockResolvedValue(undefined);
+            jest.spyOn(provider as any, 'getNodeVersion').mockResolvedValue(
+                BITCOIN_CORE_FULL_VERBOSITY_VERSION,
+            );
+            processBlock = jest
+                .spyOn(provider, 'processBlock')
+                .mockResolvedValue({
+                    transactions: [],
+                    blockHash: blockCountToHash.get(3),
+                    blockTime: 0,
+                });
+            traceReorg = jest.spyOn(provider, 'traceReorg');
+
+            (
+                provider['dbTransactionService'].execute as jest.Mock
+            ).mockImplementation((fn) => fn({}));
+            (
+                provider['partitionManager'].clampBatchEnd as jest.Mock
+            ).mockImplementation((_height, _blocks, tipHeight) => tipHeight);
+            (provider as any).eventEmitter = { emit: jest.fn() };
+        });
+
+        it('does nothing when the indexed tip is still on the chain', async () => {
+            traceReorg.mockResolvedValue(3);
+
+            await provider.sync();
+
+            expect(processBlock).not.toHaveBeenCalled();
+        });
+
+        it('re-indexes the tip after a reorg that keeps the same height', async () => {
+            // Block 3 was replaced, so the trace falls back to height 2 while
+            // the node's tip height is still 3.
+            traceReorg.mockResolvedValue(2);
+
+            await provider.sync();
+
+            expect(traceReorg).toHaveBeenCalled();
+            expect(processBlock).toHaveBeenCalledTimes(1);
+            expect(processBlock).toHaveBeenCalledWith(3, 3);
+        });
     });
 
     describe('getTransactionForTweak', () => {
