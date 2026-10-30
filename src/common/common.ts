@@ -165,3 +165,21 @@ export const btcToSats = (amount: number): number => {
 export const isP2TR = (scriptPubKey: string): boolean => {
     return scriptPubKey.length === 68 && scriptPubKey.startsWith('5120');
 };
+
+/**
+ * True when a scriptPubKey (hex) is a BIP-141 witness program of version 2 or
+ * above: OP_2..OP_16 followed by a single direct push of 2 to 40 bytes that
+ * fills the rest of the script.
+ *
+ * A script that merely starts with OP_2..OP_16 is not a witness program. Bare
+ * multisig (OP_2 <pubkey> <pubkey> OP_2 OP_CHECKMULTISIG) is the common case,
+ * and spending it does not make a transaction ineligible for silent payments.
+ */
+export const isWitnessV2OrAbove = (scriptPubKey: string): boolean => {
+    const length = scriptPubKey.length / 2;
+    if (length < 4 || length > 42) return false;
+
+    const version = parseInt(scriptPubKey.slice(0, 2), 16);
+    const pushLength = parseInt(scriptPubKey.slice(2, 4), 16);
+    return 0x52 <= version && version <= 0x60 && pushLength === length - 2;
+};

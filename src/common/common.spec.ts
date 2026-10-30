@@ -1,4 +1,9 @@
-import { btcToSats, extractPubKeyFromScript, isP2TR } from '@/common/common';
+import {
+    btcToSats,
+    extractPubKeyFromScript,
+    isP2TR,
+    isWitnessV2OrAbove,
+} from '@/common/common';
 
 describe('Common', () => {
     it.each([
@@ -257,5 +262,63 @@ describe('isP2TR', () => {
         { description: 'empty script', spk: '', expected: false },
     ])('should return $expected for $description', ({ spk, expected }) => {
         expect(isP2TR(spk)).toBe(expected);
+    });
+});
+
+describe('isWitnessV2OrAbove', () => {
+    const pubKey1 =
+        '025a1e61f898173040e20616d43e9f496fba90338a39faa1ed98fcbaeee4dd9be5';
+    const pubKey2 =
+        '03bd85685d03d111699b15d046319febe77f8de5286e9e512703cdee1bf3be3792';
+
+    it.each([
+        {
+            description: 'witness v2 with a 32-byte program',
+            spk: '5220' + 'a'.repeat(64),
+            expected: true,
+        },
+        {
+            description: 'witness v16 with a 2-byte program',
+            spk: '6002aaaa',
+            expected: true,
+        },
+        {
+            description: 'witness v16 with a 40-byte program',
+            spk: '6028' + 'a'.repeat(80),
+            expected: true,
+        },
+        {
+            description: 'P2TR (witness v1)',
+            spk: '5120' + 'a'.repeat(64),
+            expected: false,
+        },
+        {
+            description: 'P2WPKH (witness v0)',
+            spk: '0014' + 'a'.repeat(40),
+            expected: false,
+        },
+        {
+            description: 'bare 2-of-2 multisig starting with OP_2',
+            spk: '5221' + pubKey1 + '21' + pubKey2 + '52ae',
+            expected: false,
+        },
+        {
+            description: 'OP_2 and a push that leaves trailing bytes',
+            spk: '5220' + 'a'.repeat(64) + '87',
+            expected: false,
+        },
+        {
+            description: 'witness v2 with a 41-byte program',
+            spk: '5229' + 'a'.repeat(82),
+            expected: false,
+        },
+        {
+            description: 'witness v2 with a 1-byte program',
+            spk: '5201aa',
+            expected: false,
+        },
+        { description: 'empty script', spk: '', expected: false },
+    ])('should return $expected for $description', ({ spk, expected }) => {
+        expect(isWitnessV2OrAbove(spk)).toBe(expected);
     });
 });

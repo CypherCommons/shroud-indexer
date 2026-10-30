@@ -3,6 +3,7 @@ import {
     createTaggedHash,
     extractPubKeyFromScript,
     isP2TR,
+    isWitnessV2OrAbove,
 } from '@/common/common';
 import { publicKeyCombine, publicKeyTweakMul } from 'secp256k1';
 import { Injectable } from '@nestjs/common';
@@ -119,11 +120,7 @@ export class IndexerService {
         // verify that the transaction does not spend an output with SegWit version > 1
         // this would make the transaction invalid for silent payment v0
         for (const input of vin) {
-            // grab the first op code of the prevOutScript
-            const firstOpCode = parseInt(input.prevOutScript.slice(0, 2), 16);
-            // if the first op code is in the range OP_2-OP_16 (0x52-0x60)
-            // then the transaction is ineligible
-            if (0x52 <= firstOpCode && firstOpCode <= 0x60) return null;
+            if (isWitnessV2OrAbove(input.prevOutScript)) return null;
         }
 
         // extract the input public keys from the transaction
